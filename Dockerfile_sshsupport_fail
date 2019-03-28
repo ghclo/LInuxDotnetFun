@@ -1,0 +1,28 @@
+FROM microsoft/dotnet:2.2-sdk AS installer-env
+
+COPY . /src/dotnet-function-app
+RUN cd /src/dotnet-function-app && \
+    mkdir -p /home/site/wwwroot && \
+    dotnet publish *.csproj --output /home/site/wwwroot
+
+FROM mcr.microsoft.com/azure-functions/dotnet:2.0
+ENV AzureWebJobsScriptRoot=/home/site/wwwroot
+COPY --from=installer-env ["/home/site/wwwroot", "/home/site/wwwroot"]
+
+# ------------------------
+# SSH Server support
+# ------------------------
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends openssh-server \
+	&& echo "root:Docker!" | chpasswd
+
+COPY sshd_config /etc/ssh/
+ENV PORT 80
+ENV SSH_PORT 2222
+
+EXPOSE 2222 80
+COPY init_container.sh /opt/startup
+RUN service ssh start
+# RUN chmod 755 /opt/startup/init_container.sh
+# ENTRYPOINT ["/opt/startup/init_container.sh"]
+
